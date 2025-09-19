@@ -1,125 +1,91 @@
+# enhanced_agent.py
 import numpy as np
+from typing import Dict
 
-class DisinformationAgent:
+class EnhancedDisinformationAgent:
     """
-    Agent for ABM disinformation propagation with:
-    - Diffusion of Innovations adopter categories (affects belief threshold)
-    - Protection Motivation Theory (PMT) attributes and resistance calculation
-    - Long-memory exposure effect (exposure_memory influences decay)
-    - Non-linear social reinforcement via q-exponent
+    A highly advanced agent with a complex cognitive and strategic architecture.
+    - Belief is modeled as a quantum superposition state.
+    - Reputation and strategy are platform-specific (Multiplex).
+    - Makes strategic decisions based on utility calculation.
+    - Possesses a strategy attribute for Evolutionary Game Theory.
     """
-    def __init__(self, agent_id: int, rng: np.random.Generator, 
-                 adopter_dist=None,
-                 initial_belief: float = 0.0,
-                 ideology: float | None = None,
-                 pmt_from_latent: dict | None = None):
+    def __init__(self, agent_id: int, rng: np.random.Generator, platforms: list, pmt_params: dict, strategy: str):
         self.id = agent_id
         self.rng = rng
-        self.belief = float(initial_belief)
-        # Optional trait used for homophily rewiring (e.g., ideology [-3,3])
-        self.ideology = float(ideology if ideology is not None else rng.normal(0, 1))
+        self.platforms = platforms
+        
+        # --- Quantum Cognition: Belief State ---
+        # State vector [alpha, beta] for |Skeptic> and |Believer>
+        # Initialized to a neutral superposition state
+        self.belief_state = np.array([1/np.sqrt(2), 1/np.sqrt(2)], dtype=complex)
 
-        # DOI: adopter category and belief threshold mapping
-        self.adopter_category = self.assign_adopter_category(adopter_dist)
-        self.belief_threshold = self.set_belief_threshold()
+        # --- Multiplex Game Theory: Platform-specific attributes ---
+        self.reputation: Dict[str, float] = {p: rng.uniform(0.3, 0.7) for p in platforms}
+        
+        # --- Evolutionary Game Theory (EGT) ---
+        self.strategy = strategy # e.g., 'AggressiveSharer', 'CautiousVerifier'
+        self.payoff = 0.0 # Payoff accumulated for strategy success
 
-        # PMT: initialize from latent traits if provided, otherwise random in [0,1]
-        if pmt_from_latent is None:
-            self.perceived_severity = rng.random()
-            self.perceived_vulnerability = rng.random()
-            self.self_efficacy = rng.random()
-            self.response_efficacy = rng.random()
+        # --- Core Agent Parameters (from survey/IPC) ---
+        self.pmt = pmt_params # Contains severity, vulnerability, etc.
+        self.base_beta = 0.0 # Propensity to share, determined by strategy
+        self.gamma = 0.0 # Propensity to recover
+        
+    def measure_belief(self) -> str:
+        """ Collapses the quantum belief state into a classical outcome. """
+        prob_skeptic = np.abs(self.belief_state[0])**2
+        if self.rng.random() < prob_skeptic:
+            return 'Skeptic'
         else:
-            # Expect standardized inputs in [0,1]; clip just in case
-            self.perceived_severity = float(np.clip(pmt_from_latent.get('severity', rng.random()), 0, 1))
-            self.perceived_vulnerability = float(np.clip(pmt_from_latent.get('vulnerability', rng.random()), 0, 1))
-            self.self_efficacy = float(np.clip(pmt_from_latent.get('self_efficacy', rng.random()), 0, 1))
-            self.response_efficacy = float(np.clip(pmt_from_latent.get('response_efficacy', rng.random()), 0, 1))
+            return 'Believer'
 
-        # Long memory counter of exposures to current topic
-        self.exposure_memory = 0
-
-        # Convenience cached status string for simple analytics
-        self.status = self.update_status_from_belief()
-
-    def assign_adopter_category(self, adopter_dist=None) -> str:
-        if adopter_dist is None:
-            adopter_dist = {
-                'innovator': 0.025,
-                'early_adopter': 0.135,
-                'early_majority': 0.34,
-                'late_majority': 0.34,
-                'laggard': 0.16
-            }
-        cats = list(adopter_dist.keys())
-        probs = np.array([adopter_dist[c] for c in cats], dtype=float)
-        probs = probs / probs.sum()
-        return self.rng.choice(cats, p=probs)
-
-    def set_belief_threshold(self) -> float:
-        thresholds = {
-            'innovator': 0.20,
-            'early_adopter': 0.40,
-            'early_majority': 0.60,
-            'late_majority': 0.80,
-            'laggard': 0.95
-        }
-        return float(thresholds[self.adopter_category])
-
-    def calculate_resistance(self) -> float:
-        # PMT resistance: high threat appraisal and high coping appraisal -> higher resistance
-        threat_appraisal = self.perceived_severity * self.perceived_vulnerability
-        coping_appraisal = self.self_efficacy * self.response_efficacy
-        resistance = float(np.clip(threat_appraisal * coping_appraisal, 0.0, 1.0))
-        return resistance
-
-    def update_status_from_belief(self) -> str:
-        # Simplified mapping: belief above threshold => "Infected"; otherwise "Susceptible"
-        return "Infected" if self.belief >= self.belief_threshold else "Susceptible"
-
-    def decay_belief(self) -> None:
-        # Long-memory influenced decay per pasted_content_2
-        # Decay slower as exposure_memory grows
-        decay_factor = 0.99 + (0.009 * (1 - (1 / (self.exposure_memory + 1))))
-        decay_factor = float(np.clip(decay_factor, 0.0, 0.9999))
-        if self.status != "Infected":  # don't decay strongly when firmly infected
-            self.belief *= decay_factor
-            self.belief = float(np.clip(self.belief, 0.0, 1.0))
-
-    def apply_media_event(self, effect_strength: float, cognitive_ability: float | None = None):
-        # Example: agents with higher cognitive ability respond more to fact-checks
-        if cognitive_ability is None:
-            cognitive_ability = float(self.rng.uniform(0, 1))
-        if cognitive_ability > 0.7:
-            self.belief *= (1.0 - float(np.clip(effect_strength, 0.0, 1.0)))
-            self.belief = float(np.clip(self.belief, 0.0, 1.0))
-            self.status = self.update_status_from_belief()
-
-    def interact_update(self, infected_neighbor_beliefs: list[float],
-                        base_persuasiveness: float,
-                        q_exponent: float,
-                        dynamic_msg_factor: float) -> None:
+    def update_belief(self, information_matrix: np.ndarray):
         """
-        Update belief from neighbors using q-exponent social pressure and PMT resistance.
-        infected_neighbor_beliefs: beliefs of neighbors currently "Infected"
-        base_persuasiveness: baseline persuasiveness scalar in [0,1]
-        q_exponent: q > 1 super-linear, q < 1 sub-linear
-        dynamic_msg_factor: [0,1] scaler derived from IMT2-like message properties
+        Updates the belief state by applying an information operator (rotation matrix).
+        Fact-checks rotate towards |Skeptic>, endorsements rotate towards |Believer>.
         """
-        num_infected = len(infected_neighbor_beliefs)
-        if num_infected <= 0:
-            return
-        # Non-linear social pressure
-        social_pressure = (num_infected ** q_exponent) * base_persuasiveness * dynamic_msg_factor
-        social_pressure = float(np.clip(social_pressure, 0.0, 1.0))
-        # Average source belief vs current belief
-        source_belief = float(np.mean(infected_neighbor_beliefs))
-        resistance = self.calculate_resistance()
-        belief_change = (source_belief - self.belief) * social_pressure * (1.0 - resistance)
-        # Apply update and memory increment
-        self.belief = float(np.clip(self.belief + belief_change, 0.0, 1.0))
-        if belief_change > 0:
-            self.exposure_memory += 1
-        self.status = self.update_status_from_belief()
+        self.belief_state = information_matrix @ self.belief_state
+        # Normalize the state vector to maintain unit length
+        self.belief_state /= np.linalg.norm(self.belief_state)
+
+    def calculate_share_utility(self, platform: str, moderation_level: float) -> float:
+        """
+        Calculates the expected utility of sharing a piece of content.
+        This is a core game-theoretic calculation.
+        """
+        # Simplified utility: potential reputation gain vs. potential loss
+        # Higher own reputation -> higher potential gain
+        # Higher moderation -> higher potential loss if debunked
+        potential_gain = self.reputation[platform] * (1 - moderation_level)
+        potential_loss = (1 - self.reputation[platform]) * moderation_level
+        
+        # Strategy modifies the calculation
+        if self.strategy == 'AggressiveSharer':
+            # Overweighs potential gain
+            return 2.0 * potential_gain - 0.5 * potential_loss
+        elif self.strategy == 'CautiousVerifier':
+            # Overweighs potential loss
+            return 0.5 * potential_gain - 2.0 * potential_loss
+        else:
+            return potential_gain - potential_loss
+
+    def decide_to_share(self, platform: str, moderation_level: float) -> bool:
+        """ Makes the strategic decision to share or not. """
+        utility = self.calculate_share_utility(platform, moderation_level)
+        # Share if utility is positive
+        return utility > 0
+
+    def update_reputation(self, platform: str, outcome_is_successful: bool):
+        """
+        Updates reputation based on the outcome of a sharing event.
+        Uses the formula: R(t+1) = lambda*R(t) + (1-lambda)*outcome
+        """
+        lambda_persistence = 0.9 # How much old reputation persists
+        current_rep = self.reputation[platform]
+        outcome_val = 1.0 if outcome_is_successful else 0.0
+        
+        new_rep = lambda_persistence * current_rep + (1 - lambda_persistence) * outcome_val
+        self.reputation[platform] = np.clip(new_rep, 0.0, 1.0)
 
 
