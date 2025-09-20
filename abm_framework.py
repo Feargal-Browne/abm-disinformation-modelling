@@ -1,8 +1,14 @@
+"""
+This module defines the AgentBasedModel class, which is a simple agent-based
+model for simulating the spread of disinformation.
+"""
+import networkx as nx
 import numpy as np
 import pandas as pd
-import networkx as nx
-from sedpnr_model import SEDPNRModel # Assuming sedpnr_model.py is in the same directory
-from ipc_regression import IPCRegression # Assuming ipc_regression.py is in the same directory
+# Assuming sedpnr_model.py is in the same directory
+from sedpnr_model import SEDPNRModel
+# Assuming ipc_regression.py is in the same directory
+from ipc_regression import IPCRegression
 
 # --- IMPORTANT NOTE ON EXECUTION ENVIRONMENT ---
 # Simulating 200,000 agents on a scale-free network with complex dynamics
@@ -10,12 +16,26 @@ from ipc_regression import IPCRegression # Assuming ipc_regression.py is in the 
 # or a dedicated high-performance computing environment is strongly recommended.
 # ------------------------------------------------
 
+
 class AgentBasedModel:
+    """
+    A simple agent-based model for simulating the spread of disinformation.
+    """
+
     def __init__(self, num_agents=200000, population_data=None):
+        """
+        Initializes the AgentBasedModel.
+
+        Args:
+            num_agents (int): The number of agents in the simulation.
+            population_data (pd.DataFrame, optional): The population data for the agents. Defaults to None.
+        """
         self.num_agents = num_agents
-        self.agents = [] # List to hold agent objects/dictionaries
+        self.agents = []  # List to hold agent objects/dictionaries
         self.network = None
-        self.population_data = population_data # Data from survey, IRT, and IPC regression
+        self.network_adj_matrix = None
+        # Data from survey, IRT, and IPC regression
+        self.population_data = population_data
         self.ipc_regressor = IPCRegression()
 
     def initialize_agents(self):
@@ -31,8 +51,10 @@ class AgentBasedModel:
             print("Warning: No population data provided. Generating dummy agent data.")
             # Generate dummy latent trait scores and network sizes for demonstration
             # In a real scenario, these would be sampled from distributions derived from survey data
-            dummy_latent_traits = np.random.randn(self.num_agents, 5) # 5 Big 5 traits
-            dummy_network_sizes = np.random.randint(10, 1000, self.num_agents) # Random network sizes
+            dummy_latent_traits = np.random.randn(
+                self.num_agents, 5)  # 5 Big 5 traits
+            dummy_network_sizes = np.random.randint(
+                10, 1000, self.num_agents)  # Random network sizes
 
             # Create a dummy DataFrame for IPC regression prediction
             agent_data_for_ipc = pd.DataFrame({
@@ -45,11 +67,13 @@ class AgentBasedModel:
             })
 
             # Fit dummy IPC models (in a real scenario, these would be pre-fitted)
-            dummy_ipc_data = self.ipc_regressor.generate_dummy_data(num_participants=1000) # Use smaller dummy data for fitting
+            dummy_ipc_data = self.ipc_regressor.generate_dummy_data(
+                num_participants=1000)  # Use smaller dummy data for fitting
             self.ipc_regressor.fit_ipc_models(dummy_ipc_data)
 
             # Predict agent-specific beta and gamma
-            predicted_beta, predicted_gamma = self.ipc_regressor.predict_agent_parameters(agent_data_for_ipc)
+            predicted_beta, predicted_gamma = self.ipc_regressor.predict_agent_parameters(
+                agent_data_for_ipc)
 
             for i in range(self.num_agents):
                 self.agents.append({
@@ -58,10 +82,10 @@ class AgentBasedModel:
                     "network_size": dummy_network_sizes[i],
                     "beta_i": predicted_beta[i],
                     "gamma_i": predicted_gamma[i],
-                    "sigma_i": np.random.rand() * 0.05, # Placeholder
-                    "rho_i": np.random.rand() * 0.05, # Placeholder
-                    "p_i_D_to_P": np.random.rand(), # Placeholder
-                    "eta_i": np.random.rand() * 0.01 # Placeholder
+                    "sigma_i": np.random.rand() * 0.05,  # Placeholder
+                    "rho_i": np.random.rand() * 0.05,  # Placeholder
+                    "p_i_D_to_P": np.random.rand(),  # Placeholder
+                    "eta_i": np.random.rand() * 0.01  # Placeholder
                 })
         else:
             # In a real scenario, sample from self.population_data distributions
@@ -94,7 +118,8 @@ class AgentBasedModel:
                 })
 
                 # Predict agent-specific beta and gamma using the pre-fitted IPC regressor
-                predicted_beta, predicted_gamma = self.ipc_regressor.predict_agent_parameters(single_agent_ipc_data)
+                predicted_beta, predicted_gamma = self.ipc_regressor.predict_agent_parameters(
+                    single_agent_ipc_data)
 
                 self.agents.append({
                     "id": i,
@@ -102,10 +127,10 @@ class AgentBasedModel:
                     "network_size": agent_network_size,
                     "beta_i": predicted_beta[0],
                     "gamma_i": predicted_gamma[0],
-                    "sigma_i": np.random.rand() * 0.05, # Placeholder
-                    "rho_i": np.random.rand() * 0.05, # Placeholder
-                    "p_i_D_to_P": np.random.rand(), # Placeholder
-                    "eta_i": np.random.rand() * 0.01 # Placeholder
+                    "sigma_i": np.random.rand() * 0.05,  # Placeholder
+                    "rho_i": np.random.rand() * 0.05,  # Placeholder
+                    "p_i_D_to_P": np.random.rand(),  # Placeholder
+                    "eta_i": np.random.rand() * 0.01  # Placeholder
                 })
 
         print(f"Initialized {len(self.agents)} agents.")
@@ -121,7 +146,7 @@ class AgentBasedModel:
         # m: Number of edges to attach from a new node to existing nodes
         # A typical value for social networks is around 2-5.
         # The exact value of m can be calibrated.
-        m = 3 # Example value
+        m = 3  # Example value
         self.network = nx.barabasi_albert_graph(self.num_agents, m)
 
         # Assign edge weights based on agent properties (e.g., network_size, tie strength)
@@ -129,30 +154,41 @@ class AgentBasedModel:
         adj_matrix = nx.to_numpy_array(self.network)
         for i, j in self.network.edges():
             # Example: edge weight influenced by the network size of the connected agents
-            weight = (self.agents[i]["network_size"] + self.agents[j]["network_size"]) / (2 * max(self.agents[k]["network_size"] for k in range(self.num_agents)))
+            weight = (self.agents[i]["network_size"] + self.agents[j]["network_size"]) / (
+                2 * max(self.agents[k]["network_size"] for k in range(self.num_agents)))
             adj_matrix[i, j] = weight
-            adj_matrix[j, i] = weight # Ensure symmetry for undirected graph
+            adj_matrix[j, i] = weight  # Ensure symmetry for undirected graph
 
         self.network_adj_matrix = adj_matrix
-        print(f"Network built with {self.network.number_of_nodes()} nodes and {self.network.number_of_edges()} edges.")
+        print(
+            f"Network built with {self.network.number_of_nodes()} nodes and {self.network.number_of_edges()} edges.")
 
-    def run_simulation(self, time_points, q_exponent):
+    def run_simulation(self, simulation_time_points, simulation_q_exponent):
         """
         Runs the SEDPNR simulation using the initialized agents and network.
         """
         if not self.agents or self.network_adj_matrix is None:
-            raise ValueError("Agents or network not initialized. Run `initialize_agents` and `build_fractal_network` first.")
+            raise ValueError(
+                "Agents or network not initialized. Run `initialize_agents` and `build_fractal_network` first.")
+
+        h = simulation_time_points[1] - simulation_time_points[0]
+        num_steps = len(simulation_time_points)
+
+        # --- History Buffers ---
+        y_history = np.zeros((num_steps, 6, self.num_agents))
+        f_history = np.zeros((num_steps, 6, self.num_agents))
 
         print("Preparing initial states for SEDPNR model...")
         # Initial states for SEDPNR model (e.g., all susceptible except a few exposed)
         initial_sedpnr_states = np.zeros((self.num_agents, 6))
-        initial_sedpnr_states[:, 0] = 1.0 # All start as Susceptible
+        initial_sedpnr_states[:, 0] = 1.0  # All start as Susceptible
+        y_history[0, :, :] = initial_sedpnr_states.T
 
         # Seed a few agents as Exposed (e.g., first 5 agents)
         num_initial_exposed = min(5, self.num_agents)
         for i in range(num_initial_exposed):
-            initial_sedpnr_states[i, 0] = 0.0 # Not Susceptible
-            initial_sedpnr_states[i, 1] = 1.0 # Exposed
+            initial_sedpnr_states[i, 0] = 0.0  # Not Susceptible
+            initial_sedpnr_states[i, 1] = 1.0  # Exposed
 
         # Prepare agent parameters for SEDPNRModel
         sedpnr_agent_params = []
@@ -169,15 +205,32 @@ class AgentBasedModel:
         print("Running SEDPNR simulation...")
         sedpnr_model = SEDPNRModel(
             num_agents=self.num_agents,
-            q_exponent=q_exponent,
-            initial_states=initial_sedpnr_states,
+            q_exponent=simulation_q_exponent,
             agent_params=sedpnr_agent_params,
-            network_adj_matrix=self.network_adj_matrix
+            network_adj_matrix=self.network_adj_matrix,
+            h=h,
+            num_steps=num_steps
         )
 
-        solution = sedpnr_model.simulate(time_points)
+        # For this simple model, we assume dynamic_betas and current_alpha are constant.
+        dynamic_betas = np.array(
+            [agent['beta_i'] for agent in self.agents]).reshape(1, -1)
+        current_alpha = 1.0  # Assume standard ODE, not fractional
+
+        for t_idx in range(num_steps - 1):
+            if t_idx == 0:
+                f_history[0, :, :] = sedpnr_model.calculate_f(
+                    y_history[0, :, :], dynamic_betas)
+
+            current_y = y_history[t_idx, :, :]
+            current_f_history = f_history[:t_idx + 1, :, :]
+            next_y, next_f = sedpnr_model.step(
+                t_idx, current_y, current_f_history, dynamic_betas, current_alpha)
+            y_history[t_idx + 1, :, :] = next_y
+            f_history[t_idx + 1, :, :] = next_f
+
         print("SEDPNR simulation completed.")
-        return solution
+        return np.transpose(y_history, (0, 2, 1))
 
 
 if __name__ == "__main__":
@@ -193,9 +246,10 @@ if __name__ == "__main__":
     # This would be the output of `ipc_regression.py`'s `generate_dummy_data`
     # if it were run with 1000 participants and then used to train the IPC models.
     # For simplicity, let's create a small dummy population data here.
-    dummy_pop_data_size = 1000
-    dummy_pop_latent_traits = np.random.randn(dummy_pop_data_size, 5)
-    dummy_pop_network_sizes = np.random.randint(10, 1000, dummy_pop_data_size)
+    DUMMY_POP_DATA_SIZE = 1000
+    dummy_pop_latent_traits = np.random.randn(DUMMY_POP_DATA_SIZE, 5)
+    dummy_pop_network_sizes = np.random.randint(
+        10, 1000, DUMMY_POP_DATA_SIZE)
     dummy_population_data = pd.DataFrame({
         'Openness_Score': dummy_pop_latent_traits[:, 0],
         'Conscientiousness_Score': dummy_pop_latent_traits[:, 1],
@@ -206,7 +260,9 @@ if __name__ == "__main__":
     })
 
     # Initialize ABM
-    abm = AgentBasedModel(num_agents=1000, population_data=dummy_population_data) # Use smaller num_agents for quick test
+    # Use smaller num_agents for quick test
+    abm = AgentBasedModel(
+        num_agents=1000, population_data=dummy_population_data)
 
     # Initialize agents (assigns parameters based on population data)
     abm.initialize_agents()
@@ -215,11 +271,11 @@ if __name__ == "__main__":
     abm.build_fractal_network()
 
     # Define time points for simulation
-    time_points = np.linspace(0, 50, 51) # Simulate for 50 time units
+    TIME_POINTS = np.linspace(0, 50, 51)  # Simulate for 50 time units
 
     # Run the simulation
-    q_exponent = 0.5 # Example Tsallis exponent
-    simulation_results = abm.run_simulation(time_points, q_exponent)
+    Q_EXPONENT = 0.5  # Example Tsallis exponent
+    simulation_results = abm.run_simulation(TIME_POINTS, Q_EXPONENT)
 
     print("\nABM Simulation Results Shape:", simulation_results.shape)
     print("First few time steps of total Susceptible population:")
@@ -232,5 +288,3 @@ if __name__ == "__main__":
     print("3. **Parameter Calibration:** The `w_E, w_D, w_P` in `SEDPNRModel` and `m` in `build_fractal_network` need to be calibrated using real-world data and a Genetic Algorithm (GA) with Dynamic Time Warping (DTW) as described in the plan.")
     print("4. **Output Analysis:** Develop tools to analyze and visualize the simulation results (e.g., spread curves, state distributions over time).")
     print("5. **Policy Interventions:** Design mechanisms within the ABM to simulate policy interventions and evaluate their impact on disinformation spread.")
-
-

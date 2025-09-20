@@ -1,3 +1,7 @@
+"""
+This module defines the IPCRegression class, which is used to predict agent
+parameters (beta and gamma) from latent trait scores and network size.
+"""
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression
@@ -9,8 +13,16 @@ from sklearn.linear_model import LinearRegression
 # For computationally intensive tasks, Google Colab is recommended.
 # ------------------------------------------------
 
+
 class IPCRegression:
+    """
+    A class to perform Individual Parameter Contribution (IPC) Regression.
+    """
+
     def __init__(self):
+        """
+        Initializes the IPCRegression class.
+        """
         self.model_beta = None
         self.model_gamma = None
 
@@ -20,7 +32,8 @@ class IPCRegression:
         conceptual beta/gamma values for demonstration.
         In a real scenario, these would come from IRT analysis and behavioral proxies.
         """
-        print(f"Generating dummy data for {num_participants} participants for IPC regression...")
+        print(
+            f"Generating dummy data for {num_participants} participants for IPC regression...")
 
         # Dummy latent trait scores for Big 5 (5 traits)
         # Openness, Conscientiousness, Extraversion, Agreeableness, Neuroticism
@@ -31,7 +44,8 @@ class IPCRegression:
         ])
 
         # Dummy network size (e.g., log-normal distribution for scale-free like properties)
-        network_size = np.exp(np.random.randn(num_participants) * 0.5 + 2) # Mean around e^2 ~ 7.4
+        network_size = np.exp(np.random.randn(
+            num_participants) * 0.5 + 2)  # Mean around e^2 ~ 7.4
         df_network_size = pd.DataFrame(network_size, columns=['Network_Size'])
 
         # Dummy behavioral proxies for beta and gamma
@@ -39,12 +53,12 @@ class IPCRegression:
         # For demonstration, let's make them somewhat dependent on traits and network size
         # Example: higher openness/extraversion -> higher beta
         # Example: higher conscientiousness -> higher gamma
-        dummy_beta_proxy = (1 + df_latent_traits['Openness_Score'] * 0.1 + 
-                            df_latent_traits['Extraversion_Score'] * 0.15 + 
-                            np.log(df_network_size['Network_Size']) * 0.2 + 
+        dummy_beta_proxy = (1 + df_latent_traits['Openness_Score'] * 0.1 +
+                            df_latent_traits['Extraversion_Score'] * 0.15 +
+                            np.log(df_network_size['Network_Size']) * 0.2 +
                             np.random.randn(num_participants) * 0.1)
-        dummy_gamma_proxy = (1 + df_latent_traits['Conscientiousness_Score'] * 0.1 + 
-                             df_latent_traits['Neuroticism_Score'] * 0.05 + 
+        dummy_gamma_proxy = (1 + df_latent_traits['Conscientiousness_Score'] * 0.1 +
+                             df_latent_traits['Neuroticism_Score'] * 0.05 +
                              np.random.randn(num_participants) * 0.05)
 
         # Ensure proxies are positive for log-link regression
@@ -66,23 +80,23 @@ class IPCRegression:
         """
         print("Fitting IPC regression models...")
 
-        X = data[[
+        features = data[[
             'Openness_Score', 'Conscientiousness_Score', 'Extraversion_Score',
             'Agreeableness_Score', 'Neuroticism_Score', 'Network_Size'
         ]]
-        y_beta = np.log(data['Beta_Proxy']) # Apply log-link
-        y_gamma = np.log(data['Gamma_Proxy']) # Apply log-link
+        y_beta = np.log(data['Beta_Proxy'])  # Apply log-link
+        y_gamma = np.log(data['Gamma_Proxy'])  # Apply log-link
 
         # Fit Linear Regression for Beta
         self.model_beta = LinearRegression()
-        self.model_beta.fit(X, y_beta)
+        self.model_beta.fit(features, y_beta)
         print("Beta model fitted.")
         print(f"Beta Model Coefficients: {self.model_beta.coef_}")
         print(f"Beta Model Intercept: {self.model_beta.intercept_}")
 
         # Fit Linear Regression for Gamma
         self.model_gamma = LinearRegression()
-        self.model_gamma.fit(X, y_gamma)
+        self.model_gamma.fit(features, y_gamma)
         print("Gamma model fitted.")
         print(f"Gamma Model Coefficients: {self.model_gamma.coef_}")
         print(f"Gamma Model Intercept: {self.model_gamma.intercept_}")
@@ -93,7 +107,8 @@ class IPCRegression:
         `agent_data` should be a DataFrame with columns matching X used in fitting.
         """
         if self.model_beta is None or self.model_gamma is None:
-            raise ValueError("IPC models have not been fitted. Run `fit_ipc_models` first.")
+            raise ValueError(
+                "IPC models have not been fitted. Run `fit_ipc_models` first.")
 
         print("Predicting agent-specific beta and gamma parameters...")
         predicted_log_beta = self.model_beta.predict(agent_data)
@@ -128,7 +143,8 @@ if __name__ == "__main__":
         'Network_Size': [50, 500, 100]
     })
 
-    predicted_beta_agents, predicted_gamma_agents = ipc_regressor.predict_agent_parameters(hypothetical_agent_data)
+    predicted_beta_agents, predicted_gamma_agents = ipc_regressor.predict_agent_parameters(
+        hypothetical_agent_data)
 
     print("Predicted Beta for hypothetical agents:", predicted_beta_agents)
     print("Predicted Gamma for hypothetical agents:", predicted_gamma_agents)
@@ -145,5 +161,3 @@ if __name__ == "__main__":
     print("   - Stochastically assign latent trait scores and network size based on the distributions from the survey data.")
     print("   - Use the trained `ipc_regressor.predict_agent_parameters` method to calculate the unique `beta_i` and `gamma_i` for each simulated agent.")
     print("   - These `beta_i` and `gamma_i` values, along with other agent-specific parameters, will then be fed into the `SEDPNRModel`.")
-
-

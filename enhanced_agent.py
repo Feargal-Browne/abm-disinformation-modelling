@@ -1,6 +1,10 @@
-# enhanced_agent.py
-import numpy as np
+"""
+This module defines the EnhancedDisinformationAgent class, which represents
+a highly advanced agent in the agent-based model.
+"""
 from typing import Dict
+import numpy as np
+
 
 class EnhancedDisinformationAgent:
     """
@@ -10,28 +14,31 @@ class EnhancedDisinformationAgent:
     - Makes strategic decisions based on utility calculation.
     - Possesses a strategy attribute for Evolutionary Game Theory.
     """
+
     def __init__(self, agent_id: int, rng: np.random.Generator, platforms: list, pmt_params: dict, strategy: str):
         self.id = agent_id
         self.rng = rng
         self.platforms = platforms
-        
+
         # --- Quantum Cognition: Belief State ---
         # State vector [alpha, beta] for |Skeptic> and |Believer>
         # Initialized to a neutral superposition state
-        self.belief_state = np.array([1/np.sqrt(2), 1/np.sqrt(2)], dtype=complex)
+        self.belief_state = np.array(
+            [1/np.sqrt(2), 1/np.sqrt(2)], dtype=complex)
 
         # --- Multiplex Game Theory: Platform-specific attributes ---
-        self.reputation: Dict[str, float] = {p: rng.uniform(0.3, 0.7) for p in platforms}
-        
+        self.reputation: Dict[str, float] = {
+            p: rng.uniform(0.3, 0.7) for p in platforms}
+
         # --- Evolutionary Game Theory (EGT) ---
-        self.strategy = strategy # e.g., 'AggressiveSharer', 'CautiousVerifier'
-        self.payoff = 0.0 # Payoff accumulated for strategy success
+        self.strategy = strategy  # e.g., 'AggressiveSharer', 'CautiousVerifier'
+        self.payoff = 0.0  # Payoff accumulated for strategy success
 
         # --- Core Agent Parameters (from survey/IPC) ---
-        self.pmt = pmt_params # Contains severity, vulnerability, etc.
-        self.base_beta = 0.0 # Propensity to share, determined by strategy
-        self.gamma = 0.0 # Propensity to recover
-        
+        self.pmt = pmt_params  # Contains severity, vulnerability, etc.
+        self.base_beta = 0.0  # Propensity to share, determined by strategy
+        self.gamma = 0.0  # Propensity to recover
+
     def measure_belief(self) -> str:
         """ Collapses the quantum belief state into a classical outcome. """
         prob_skeptic = np.abs(self.belief_state[0])**2
@@ -59,7 +66,7 @@ class EnhancedDisinformationAgent:
         # Higher moderation -> higher potential loss if debunked
         potential_gain = self.reputation[platform] * (1 - moderation_level)
         potential_loss = (1 - self.reputation[platform]) * moderation_level
-        
+
         # Strategy modifies the calculation
         if self.strategy == 'AggressiveSharer':
             # Overweighs potential gain
@@ -81,11 +88,10 @@ class EnhancedDisinformationAgent:
         Updates reputation based on the outcome of a sharing event.
         Uses the formula: R(t+1) = lambda*R(t) + (1-lambda)*outcome
         """
-        lambda_persistence = 0.9 # How much old reputation persists
+        lambda_persistence = 0.9  # How much old reputation persists
         current_rep = self.reputation[platform]
         outcome_val = 1.0 if outcome_is_successful else 0.0
-        
-        new_rep = lambda_persistence * current_rep + (1 - lambda_persistence) * outcome_val
+
+        new_rep = lambda_persistence * current_rep + \
+            (1 - lambda_persistence) * outcome_val
         self.reputation[platform] = np.clip(new_rep, 0.0, 1.0)
-
-
