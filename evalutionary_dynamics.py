@@ -1,8 +1,13 @@
-# evolutionary_dynamics.py
+"""
+This module defines the EvolutionaryDynamics class, which manages the
+evolution of agent strategies based on payoffs.
+"""
 import numpy as np
+
 
 class EvolutionaryDynamics:
     """ Manages the evolution of agent strategies based on payoffs. """
+
     def __init__(self, strategies: list, mutation_rate: float = 0.01):
         self.strategies = strategies
         self.mutation_rate = mutation_rate
@@ -13,7 +18,7 @@ class EvolutionaryDynamics:
         This is the core of the Evolutionary Game Theory (EGT) model.
         """
         new_strategies = [agent.strategy for agent in agents]
-        
+
         for i, agent in enumerate(agents):
             neighbors = np.where(network_adj[i, :] > 0)[0]
             if len(neighbors) == 0:
@@ -21,8 +26,8 @@ class EvolutionaryDynamics:
 
             # Find the strategy of the most successful neighbor
             best_neighbor_strategy = None
-            max_payoff = agent.payoff # Start with own payoff
-            
+            max_payoff = agent.payoff  # Start with own payoff
+
             for neighbor_idx in neighbors:
                 if agents[neighbor_idx].payoff > max_payoff:
                     max_payoff = agents[neighbor_idx].payoff
@@ -39,4 +44,4 @@ class EvolutionaryDynamics:
         # Apply the new strategies and reset payoffs for the next round
         for i, agent in enumerate(agents):
             agent.strategy = new_strategies[i]
-            agent.payoff = 0.0 # Reset payoff after evolution step
+            agent.payoff = 0.0  # Reset payoff after evolution step

@@ -1,6 +1,11 @@
+"""
+This module provides a class for calibrating the agent-based model using a
+genetic algorithm. It is designed to find the optimal parameters for the
+model by comparing the simulation output to real-world data.
+"""
 import numpy as np
 import pygad
-from dtw import dtw, accelerated_dtw
+from dtw import dtw
 from enhanced_abm_framework import EnhancedAgentBasedModel
 import pandas as pd
 
@@ -14,11 +19,27 @@ import pandas as pd
 # of disinformation spread (e.g., number of infected individuals over time).
 # --------------------------------------------
 
+
 class ModelCalibrator:
+    """
+    A class for calibrating the agent-based model using a genetic algorithm.
+    """
+
     def __init__(self, num_agents: int, real_world_data: np.ndarray, time_points: np.ndarray,
                  population_data: pd.DataFrame = None, seed: int = None):
+        """
+        Initializes the ModelCalibrator.
+
+        Args:
+            num_agents (int): The number of agents in the simulation.
+            real_world_data (np.ndarray): The real-world data to compare against.
+            time_points (np.ndarray): The time points for the simulation.
+            population_data (pd.DataFrame, optional): The population data for the agents. Defaults to None.
+            seed (int, optional): The random seed for reproducibility. Defaults to None.
+        """
         self.num_agents = num_agents
-        self.real_world_data = real_world_data # Target time series (e.g., total infected over time)
+        # Target time series (e.g., total infected over time)
+        self.real_world_data = real_world_data
         self.time_points = time_points
         self.population_data = population_data
         self.seed = seed
@@ -27,11 +48,16 @@ class ModelCalibrator:
         # Parameters to be calibrated (example: m for BA network, q_exponent, w_E, w_D, w_P)
         # These ranges need to be carefully chosen based on domain knowledge.
         self.param_ranges = {
-            "m": {"low": 1, "high": 10, "type": "int"}, # For Barabasi-Albert network
-            "q_exponent": {"low": 0.1, "high": 2.0, "type": "float"}, # Tsallis exponent
-            "w_E": {"low": 0.1, "high": 2.0, "type": "float"}, # Weight for Exposed
-            "w_D": {"low": 0.1, "high": 2.0, "type": "float"}, # Weight for Doubtful
-            "w_P": {"low": 0.1, "high": 2.0, "type": "float"}  # Weight for Positively Infected
+            # For Barabasi-Albert network
+            "m": {"low": 1, "high": 10, "type": "int"},
+            # Tsallis exponent
+            "q_exponent": {"low": 0.1, "high": 2.0, "type": "float"},
+            # Weight for Exposed
+            "w_E": {"low": 0.1, "high": 2.0, "type": "float"},
+            # Weight for Doubtful
+            "w_D": {"low": 0.1, "high": 2.0, "type": "float"},
+            # Weight for Positively Infected
+            "w_P": {"low": 0.1, "high": 2.0, "type": "float"}
         }
 
         self.last_fitness = 0
@@ -43,12 +69,13 @@ class ModelCalibrator:
         Runs the ABM simulation with the given parameters and returns the total infected population over time.
         """
         # Initialize ABM with current parameters
-        abm = EnhancedAgentBasedModel(num_agents=self.num_agents, population_data=self.population_data, seed=self.seed)
+        abm = EnhancedAgentBasedModel(
+            num_agents=self.num_agents, population_data=self.population_data, seed=self.seed)
         abm.initialize_agents()
-        
+
         # Build network with the current 'm' parameter
         # Note: homophily and community parameters are fixed for calibration, or can be added to calibration
-        abm.build_fractal_network(m=int(m), rewire_prob=0.1, homophily_strength=0.5)
+        abm.build_network(m=int(m))
 
         # Update SEDPNRModel's weights based on current GA solution
         # This requires modifying SEDPNRModel to accept these weights dynamically
@@ -64,27 +91,26 @@ class ModelCalibrator:
             'is_vague': 0.6,
             'is_irrelevant': 0.3
         }
-        media_event_schedule = [] # No media events during calibration
+        media_event_schedule = []  # No media events during calibration
 
         # Run simulation
-        simulation_results = abm.run_simulation(self.time_points, q_exponent, message_properties, media_event_schedule)
+        simulation_results = abm.run_simulation(
+            self.time_points, q_exponent, message_properties, media_event_schedule)
 
         # Extract total infected population (S+E+D+P+N+R = 1, so P+N is infected)
-        # Assuming P and N are the 
+        # Assuming P and N are the infected states in your SEDPNR model, adjust accordingly.
+        # For this example, let's assume P (Positively Infected) and N (Negatively Infected)
+        # represent the 'infected' states. The `simulation_results` array has shape
+        # (time_points, num_agents, 6). We need to sum P and N for each agent at each
+        # time step, then sum across agents.
 
-
-infected states in your SEDPNR model, adjust accordingly.
-        # For this example, let's assume P (Positively Infected) and N (Negatively Infected) represent the 'infected' states.
-        # The `simulation_results` array has shape (time_points, num_agents, 6).
-        # We need to sum P and N for each agent at each time step, then sum across agents.
-        
         # Extract P and N states for all agents at all time points
-        P_states = simulation_results[:, :, 3] # Index 3 for P
-        N_states = simulation_results[:, :, 4] # Index 4 for N
+        P_states = simulation_results[:, :, 3]  # Index 3 for P
+        N_states = simulation_results[:, :, 4]  # Index 4 for N
 
         # Sum P and N for each agent, then sum across all agents to get total infected population
         total_infected_over_time = (P_states + N_states).sum(axis=1)
-        
+
         return total_infected_over_time
 
     def fitness_func(self, ga_instance, solution, solution_idx):
@@ -104,7 +130,8 @@ infected states in your SEDPNR model, adjust accordingly.
         m = int(round(m))
 
         # Run ABM simulation with these parameters
-        simulated_data = self._run_abm_simulation(m, q_exponent, w_E, w_D, w_P)
+        simulated_data = self._run_abm_simulation(
+            m, q_exponent, w_E, w_D, w_P)
 
         # Ensure simulated_data and real_world_data have the same length
         if len(simulated_data) != len(self.real_world_data):
@@ -118,11 +145,12 @@ infected states in your SEDPNR model, adjust accordingly.
         # Use dtw-python library for DTW calculation
         # The `distance` method returns the optimal alignment cost.
         try:
-            alignment = dtw(simulated_data, self.real_world_data, keep_internals=False)
+            alignment = dtw(simulated_data,
+                            self.real_world_data, keep_internals=False)
             dtw_distance = alignment.distance
         except Exception as e:
             print(f"Error during DTW calculation: {e}")
-            dtw_distance = np.inf # Penalize errors heavily
+            dtw_distance = np.inf  # Penalize errors heavily
 
         # Genetic algorithms typically maximize fitness, so we negate the distance.
         fitness = -dtw_distance
@@ -157,13 +185,14 @@ infected states in your SEDPNR model, adjust accordingly.
             fitness_func=self.fitness_func,
             sol_per_pop=sol_per_pop,
             num_genes=num_genes,
-            gene_type=[self.param_ranges[key]["type"] for key in self.param_ranges.keys()],
+            gene_type=[self.param_ranges[key]["type"]
+                       for key in self.param_ranges.keys()],
             gene_space=gene_space_pygad,
-            parent_selection_type="sss", # Steady-State Selection
+            parent_selection_type="sss",  # Steady-State Selection
             crossover_type="single_point",
             mutation_type="random",
             mutation_percent_genes=10,
-            keep_parents=-1, # Keep the best parents in the population
+            keep_parents=-1,  # Keep the best parents in the population
             random_seed=self.seed
         )
 
@@ -172,7 +201,8 @@ infected states in your SEDPNR model, adjust accordingly.
 
         self.best_solution, self.best_solution_fitness, _ = ga_instance.best_solution()
         print(f"Best solution found: {self.best_solution}")
-        print(f"Best solution fitness (negative DTW distance): {self.best_solution_fitness}")
+        print(
+            f"Best solution fitness (negative DTW distance): {self.best_solution_fitness}")
 
         # Map best solution back to parameter names
         calibrated_params = {
@@ -188,36 +218,39 @@ infected states in your SEDPNR model, adjust accordingly.
 if __name__ == "__main__":
     # --- Example Usage ---
     # 1. Generate dummy real-world data (e.g., a simple S-curve)
-    time_points = np.linspace(0, 50, 51)
+    TIME_POINTS = np.linspace(0, 50, 51)
     # Simulate a simple S-curve for 'real-world' infected data
     # This should be replaced by actual historical data of disinformation spread
-    real_world_infected_data = 1000 / (1 + np.exp(-0.2 * (time_points - 25))) # Max 1000 infected
+    REAL_WORLD_INFECTED_DATA = 1000 / \
+        (1 + np.exp(-0.2 * (TIME_POINTS - 25)))  # Max 1000 infected
 
     # 2. Generate dummy population data (as in enhanced_abm_framework.py)
-    dummy_pop_data_size = 1000
-    rng_pop = np.random.default_rng(42)
-    dummy_pop_latent_traits = rng_pop.normal(0, 1, size=(dummy_pop_data_size, 5))
-    dummy_pop_network_sizes = rng_pop.integers(10, 1000, dummy_pop_data_size)
-    dummy_population_data = pd.DataFrame({
-        'Openness_Score': dummy_pop_latent_traits[:, 0],
-        'Conscientiousness_Score': dummy_pop_latent_traits[:, 1],
-        'Extraversion_Score': dummy_pop_latent_traits[:, 2],
-        'Agreeableness_Score': dummy_pop_latent_traits[:, 3],
-        'Neuroticism_Score': dummy_pop_latent_traits[:, 4],
-        'Network_Size': dummy_pop_network_sizes
+    DUMMY_POP_DATA_SIZE = 1000
+    RNG_POP = np.random.default_rng(42)
+    DUMMY_POP_LATENT_TRAITS = RNG_POP.normal(
+        0, 1, size=(DUMMY_POP_DATA_SIZE, 5))
+    DUMMY_POP_NETWORK_SIZES = RNG_POP.integers(10, 1000, DUMMY_POP_DATA_SIZE)
+    DUMMY_POPULATION_DATA = pd.DataFrame({
+        'Openness_Score': DUMMY_POP_LATENT_TRAITS[:, 0],
+        'Conscientiousness_Score': DUMMY_POP_LATENT_TRAITS[:, 1],
+        'Extraversion_Score': DUMMY_POP_LATENT_TRAITS[:, 2],
+        'Agreeableness_Score': DUMMY_POP_LATENT_TRAITS[:, 3],
+        'Neuroticism_Score': DUMMY_POP_LATENT_TRAITS[:, 4],
+        'Network_Size': DUMMY_POP_NETWORK_SIZES
     })
 
     # 3. Initialize and run calibrator
     calibrator = ModelCalibrator(
-        num_agents=100, # Use a smaller number of agents for calibration runs
-        real_world_data=real_world_infected_data,
-        time_points=time_points,
-        population_data=dummy_population_data,
+        num_agents=100,  # Use a smaller number of agents for calibration runs
+        real_world_data=REAL_WORLD_INFECTED_DATA,
+        time_points=TIME_POINTS,
+        population_data=DUMMY_POPULATION_DATA,
         seed=42
     )
 
-    calibrated_parameters = calibrator.calibrate(num_generations=10, sol_per_pop=5) # Reduced generations for quick test
-    print("\nCalibrated Parameters:", calibrated_parameters)
+    CALIBRATED_PARAMETERS = calibrator.calibrate(
+        num_generations=10, sol_per_pop=5)  # Reduced generations for quick test
+    print("\nCalibrated Parameters:", CALIBRATED_PARAMETERS)
 
     # --- Next Steps ---
     print("\n--- Next Steps ---")
