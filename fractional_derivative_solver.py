@@ -1,108 +1,111 @@
 import numpy as np
-# from differint.differint import differint # Assuming differint is installed
-# from pyfod.fod import FractionalDerivative # Assuming pyfod is installed
+from scipy.special import gamma
+import matplotlib.pyplot as plt
 
-# --- IMPORTANT NOTE ON FRACTIONAL DERIVATIVE IMPLEMENTATION ---
-# Implementing a robust and efficient fractional derivative solver for a system
-# of coupled differential equations like SEDPNR is a highly complex task.
-# Standard ODE solvers (like scipy.integrate.odeint) are not designed for FDEs.
-# This file provides a *conceptual* framework and a *simplified numerical approximation*
-# for demonstration. For a truly accurate and stable solution, a dedicated FDE library
-# or a custom numerical scheme (e.g., Adams-Bashforth-Moulton method for FDEs)
-# would be required, which is beyond the scope of a direct, simple integration.
-# The `differint` and `pyfod` libraries offer some numerical methods for fractional
-# derivatives, but integrating them into a system of coupled FDEs often requires
-# re-framing the problem or using their specialized solvers.
-# ----------------------------------------------------------------
+def fde_abm(alpha: float, f, y0: float, t_span: tuple, h: float):
+    """
+    Solves a Caputo fractional differential equation using the Adams-Bashforth-Moulton method.
 
-class FractionalDerivativeSolver:
-    def __init__(self, alpha: float, h: float, history_length: int = 100):
-        """
-        Initializes a conceptual fractional derivative solver.
-        alpha: Order of the fractional derivative (0 < alpha <= 1).
-        h: Step size (time step).
-        history_length: Number of past points to consider for the derivative (memory).
-        """
-        self.alpha = alpha
-        self.h = h
-        self.history_length = history_length
-        self.history = [] # Stores past values of the function
+    Args:
+        alpha (float): The fractional order of the derivative (0 < alpha <= 1).
+        f (callable): The function f(t, y) defining the FDE: D^alpha y(t) = f(t, y(t)).
+        y0 (float): The initial condition y(0).
+        t_span (tuple): A tuple (t_start, t_end) for the time interval.
+        h (float): The step size for the numerical solution.
 
-    def caputo_derivative_approx(self, current_value: float, func_at_past_points: list[float]) -> float:
-        """
-        Conceptual approximation of the Caputo fractional derivative.
-        This is a highly simplified numerical approximation (e.g., a truncated Grünwald-Letnikov).
-        It does NOT represent a full, accurate FDE solver.
+    Returns:
+        tuple: A tuple containing two numpy arrays:
+               - t_vals: The time points.
+               - y_vals: The numerical solution y(t) at those time points.
+    """
+    t_start, t_end = t_span
+    t_vals = np.arange(t_start, t_end + h, h)
+    n = len(t_vals)
+    y_vals = np.zeros(n)
+    y_vals[0] = y0
 
-        For a proper Caputo derivative, one would typically use:
-        - Finite difference methods (e.g., L1-algorithm for Caputo)
-        - Predictor-corrector methods (e.g., Adams-Bashforth-Moulton)
-        - Spectral methods
+    # Store the history of f(t, y) values for memory effect
+    f_history = np.zeros(n)
 
-        `current_value`: The value of the function at the current time t.
-        `func_at_past_points`: List of function values at t-h, t-2h, ..., t-N*h.
-        """
-        if self.alpha == 1.0:
-            # For alpha=1, it's a standard first derivative (rate of change)
-            if len(func_at_past_points) < 1:
-                return 0.0 # Or handle initial condition differently
-            return (current_value - func_at_past_points[-1]) / self.h
+    for k in range(n - 1):
+        # Store the current f value
+        f_history[k] = f(t_vals[k], y_vals[k])
 
-        # Simplified Grünwald-Letnikov approximation (conceptual)
-        # This is a very basic and potentially unstable approximation for systems.
-        # The coefficients `c_k` are generalized binomial coefficients.
-        # c_0 = 1
-        # c_1 = -alpha
-        # c_2 = -alpha * (-alpha + 1) / 2
-        # ...
+        # --- Predictor Step (Adams-Bashforth) ---
+        # Summation term for the predictor
+        predictor_sum = 0
+        for j in range(k + 1):
+            # Calculate predictor weights b_j
+            b_j = (h**alpha / alpha) * ((k + 1 - j)**alpha - (k - j)**alpha)
+            predictor_sum += b_j * f_history[j]
 
-        # This part is illustrative. A real implementation would use a proper FDE scheme.
-        # We'll just return a placeholder value for now to allow the code to run conceptually.
-        # The actual integration into SEDPNRModel would involve solving the FDE system.
-        return 0.0 # Placeholder for the fractional derivative value
+        # Calculate the predicted value y_p
+        y_predicted = y0 + (1 / gamma(alpha)) * predictor_sum
 
-    def update_history(self, value: float) -> None:
-        self.history.append(value)
-        if len(self.history) > self.history_length:
-            self.history.pop(0) # Keep history length constant
+        # Evaluate f at the predicted point
+        f_predicted = f(t_vals[k+1], y_predicted)
 
+        # --- Corrector Step (Adams-Moulton) ---
+        # Summation term for the corrector
+        corrector_sum = 0
+        
+        # Calculate corrector weight for the j=0 term
+        a_0 = (h**alpha / (alpha * (alpha + 1))) * (k**alpha * (alpha - k + 1) + (k + 1)**alpha)
+        corrector_sum += a_0 * f_history[0]
 
-# Example Usage (Conceptual)
+        # Calculate corrector weights for 1 <= j <= k
+        for j in range(1, k + 1):
+            a_j = (h**alpha / (alpha * (alpha + 1))) * (
+                (k - j + 2)**(alpha + 1) + (k - j)**(alpha + 1) - 2 * (k - j + 1)**(alpha + 1)
+            )
+            corrector_sum += a_j * f_history[j]
+        
+        # The final corrected value is the solution for this step
+        y_vals[k+1] = y0 + (1 / gamma(alpha)) * (
+            (h**alpha / (alpha * (alpha + 1))) * f_predicted + corrector_sum
+        )
+
+    return t_vals, y_vals
+    
 if __name__ == "__main__":
-    # Simulate a simple function f(t) = t^2
-    def f(t):
-        return t**2
+    # --- 1. Define the FDE problem ---
+    # The function f(t, y) for the equation D^alpha y(t) = -y(t)
+    def f_relaxation(t, y):
+        return -y
 
-    alpha = 0.5 # Fractional order
-    h = 0.1     # Time step
-    solver = FractionalDerivativeSolver(alpha=alpha, h=h, history_length=10)
+    # Initial condition
+    y0 = 1
+    
+    # Time span and step size
+    t_span = (0, 10)
+    h = 0.05
 
-    time_points = np.arange(0, 2.1, h)
-    function_values = [f(t) for t in time_points]
-    fractional_derivatives = []
+    # --- 2. Solve for different fractional orders ---
+    # Case 1: alpha = 1.0 (should match standard ODE solution e^-t)
+    t1, y1 = fde_abm(alpha=1.0, f=f_relaxation, y0=y0, t_span=t_span, h=h)
 
-    print(f"Conceptual Fractional Derivative (alpha={alpha}, h={h})")
-    print("Time\tValue\tFractional Derivative (Conceptual)")
+    # Case 2: alpha = 0.85
+    t2, y2 = fde_abm(alpha=0.85, f=f_relaxation, y0=y0, t_span=t_span, h=h)
 
-    for i, t in enumerate(time_points):
-        current_val = function_values[i]
-        past_vals = solver.history.copy() # Get current history
+    # Case 3: alpha = 0.5
+    t3, y3 = fde_abm(alpha=0.5, f=f_relaxation, y0=y0, t_span=t_span, h=h)
 
-        if i > 0:
-            # This is where a real FDE solver would be called.
-            # For this conceptual example, we just show the structure.
-            try:
-                fd = solver.caputo_derivative_approx(current_val, past_vals)
-            except NotImplementedError:
-                fd = "N/A (requires full FDE solver)"
-        else:
-            fd = 0.0 # Initial condition for derivative
+    # --- 3. Plot the results ---
+    plt.style.use('seaborn-v0_8-whitegrid')
+    fig, ax = plt.subplots(figsize=(10, 6))
 
-        fractional_derivatives.append(fd)
-        solver.update_history(current_val)
-        print(f"{t:.1f}\t{current_val:.2f}\t{fd}")
+    ax.plot(t1, y1, label=r'$\alpha = 1.0$ (Classical Decay)', linewidth=2.5, color='red')
+    ax.plot(t2, y2, label=r'$\alpha = 0.85$', linewidth=2, linestyle='--', color='blue')
+    ax.plot(t3, y3, label=r'$\alpha = 0.50$', linewidth=2, linestyle=':', color='green')
+    
+    # For comparison, plot the true analytical solution for alpha=1.0
+    ax.plot(t1, np.exp(-t1), label=r'Analytical $e^{-t}$', linestyle='-.', color='black', alpha=0.5)
 
-    print("\nNOTE: The fractional derivative values above are conceptual placeholders.")
-    print("A full implementation requires a dedicated FDE numerical method.")
+    ax.set_title('Solution to the Fractional Relaxation Equation $D^\\alpha y(t) = -y(t)$', fontsize=14)
+    ax.set_xlabel('Time (t)', fontsize=12)
+    ax.set_ylabel('y(t)', fontsize=12)
+    ax.legend(fontsize=11)
+    ax.grid(True, which='both', linestyle='--', linewidth=0.5)
+    plt.show()
 
 
